@@ -1,0 +1,1 @@
+public record PaymentResult(boolean isSuccess, String message) {}
