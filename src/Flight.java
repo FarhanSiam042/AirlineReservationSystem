@@ -32,16 +32,7 @@ public class Flight extends FlightDistance {
         this.gate = null;
     }
 
-    /**
-     * Creates new random flight from the specified arguments.
-     *
-     * @param flightSchedule           includes departure date and time of flight
-     * @param flightNumber             unique identifier of each flight
-     * @param numOfSeatsInTheFlight    available seats in the flight
-     * @param chosenDestinations       consists of origin and destination airports(cities)
-     * @param distanceBetweenTheCities gives the distance between the airports both in miles and kilometers
-     * @param gate                     from where passengers will board to the aircraft
-     */
+
     Flight(FlightDetails details) {
         this.flightSchedule = details.getFlightSchedule();
         this.flightNumber = details.getFlightNumber();
