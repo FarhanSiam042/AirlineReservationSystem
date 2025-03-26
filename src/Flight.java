@@ -1,139 +1,358 @@
+import java.time.Instant;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
 
-/**
- * Refactored Flight class with:
- * 1. Extracted value objects
- * 2. Encapsulated collections
- * 3. Simplified conditionals
- * 4. Proper method organization
- */
-public class Flight {
-    // 1.3.1 Replace Data Value with Object
-    private final FlightNumber flightNumber;
-    private final Route route;
-    private final Schedule schedule;
-    private final Aircraft aircraft;
+public class Flight extends FlightDistance {
 
-    // 1.3.3 Encapsulate Collection
-    private final List<PassengerManifest> passengers;
-    private int availableSeats;
+    //        ************************************************************ Fields ************************************************************
 
-    // 1.6.1 Pull Up Constructor Body
-    public Flight(FlightNumber number, Route route, Schedule schedule, int totalSeats) {
-        this.flightNumber = number;
-        this.route = route;
-        this.schedule = schedule;
-        this.aircraft = new Aircraft(totalSeats);
-        this.passengers = new ArrayList<>();
-        this.availableSeats = totalSeats;
+    private final String flightSchedule;
+    private final String flightNumber;
+    private final String fromWhichCity;
+    private final String gate;
+    private final String toWhichCity;
+    private double distanceInMiles;
+    private double distanceInKm;
+    private String flightTime;
+    private int numOfSeatsInTheFlight;
+    private int customerIndex;
+    private static int nextFlightDay = 0;
+    private static final List<Flight> flightList = new ArrayList<>();
+
+    //        ************************************************************ Behaviours/Methods ************************************************************
+
+    Flight() {
+        this.flightSchedule = null;
+        this.flightNumber = null;
+        this.numOfSeatsInTheFlight = 0;
+        toWhichCity = null;
+        fromWhichCity = null;
+        this.gate = null;
     }
 
-    // 1.5.3 Remove Setting Method (immutable fields)
-    public FlightNumber getFlightNumber() {
+    /**
+     * Creates new random flight from the specified arguments.
+     *
+     * @param flightSchedule           includes departure date and time of flight
+     * @param flightNumber             unique identifier of each flight
+     * @param numOfSeatsInTheFlight    available seats in the flight
+     * @param chosenDestinations       consists of origin and destination airports(cities)
+     * @param distanceBetweenTheCities gives the distance between the airports both in miles and kilometers
+     * @param gate                     from where passengers will board to the aircraft
+     */
+    Flight(FlightDetails details) {
+        this.flightSchedule = details.getFlightSchedule();
+        this.flightNumber = details.getFlightNumber();
+        this.numOfSeatsInTheFlight = details.getSeats();
+        this.fromWhichCity = details.getFromCity();
+        this.toWhichCity = details.getToCity();
+        this.gate = details.getGate();
+
+        // Set distance information
+        String[] distanceInfo = details.getDistanceInfo();
+        this.distanceInMiles = Double.parseDouble(distanceInfo[0]);
+        this.distanceInKm = Double.parseDouble(distanceInfo[1]);
+
+        // Initialize other fields
+        this.listOfRegisteredCustomersInAFlight = new ArrayList<>();
+        this.customerIndex = 0;
+        this.flightTime = calculateFlightTime(distanceInMiles);
+    }
+
+    /**
+     * Creates Flight Schedule. All methods of this class are collaborating with each other
+     * to create flight schedule of the said length in this method.
+     */
+    public static void initializeFlightSchedule() {
+        FlightScheduler scheduler = new FlightScheduler();
+        scheduler.generateFlightSchedule(flightList, 15);
+    }
+
+    /**
+     * Registers new Customer in this Flight.
+     *
+     * @param customer customer to be registered
+     */
+    void addNewCustomerToFlight(Customer customer) {
+        this.listOfRegisteredCustomersInAFlight.add(customer);
+    }
+
+    /**
+     * Adds numOfTickets to existing customer's tickets for the this flight.
+     *
+     * @param customer     customer in which tickets are to be added
+     * @param numOfTickets number of tickets to add
+     */
+    void addTicketsToExistingCustomer(Customer customer, int numOfTickets) {
+        customer.addExistingFlightToCustomerList(customerIndex, numOfTickets);
+    }
+
+    /***
+     * Checks if the specified customer is already registered in the FLight's array list
+     * @param customersList of the flight
+     * @param customer specified customer to be checked
+     * @return true if the customer is already registered in the said flight, false otherwise
+     */
+    boolean isCustomerAlreadyAdded(List<Customer> customersList, Customer customer) {
+        boolean isAdded = false;
+        for (Customer customer1 : customersList) {
+            if (customer1.getUserID().equals(customer.getUserID())) {
+                isAdded = true;
+                customerIndex = customersList.indexOf(customer1);
+                break;
+            }
+        }
+        return isAdded;
+    }
+
+    /**
+     * Calculates the flight time, using avg. ground speed of 450 knots.
+     *
+     * @param distanceBetweenTheCities distance between the cities/airports in miles
+     * @return formatted flight time
+     */
+    public String calculateFlightTime(double distanceBetweenTheCities) {
+        double groundSpeed = 450;
+        double time = (distanceBetweenTheCities / groundSpeed);
+        String timeInString = String.format("%.4s", time);
+        String[] timeArray = timeInString.replace('.', ':').split(":");
+        int hours = Integer.parseInt(timeArray[0]);
+        int minutes = Integer.parseInt(timeArray[1]);
+        int modulus = minutes % 5;
+        // Changing flight time to make minutes near/divisible to 5.
+        if (modulus < 3) {
+            minutes -= modulus;
+        } else {
+            minutes += 5 - modulus;
+        }
+        if (minutes >= 60) {
+            minutes -= 60;
+            hours++;
+        }
+        if (hours <= 9 && Integer.toString(minutes).length() == 1) {
+            return String.format("0%s:%s0", hours, minutes);
+        } else if (hours <= 9 && Integer.toString(minutes).length() > 1) {
+            return String.format("0%s:%s", hours, minutes);
+        } else if (hours > 9 && Integer.toString(minutes).length() == 1) {
+            return String.format("%s:%s0", hours, minutes);
+        } else {
+            return String.format("%s:%s", hours, minutes);
+        }
+    }
+
+    /**
+     * Creates flight arrival time by adding flight time to flight departure time
+     *
+     * @return flight arrival time
+     */
+    public String fetchArrivalTime() {
+        /*These lines convert the String of flightSchedule to LocalDateTIme and add the arrivalTime to it....*/
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy, HH:mm a ");
+        LocalDateTime departureDateTime = LocalDateTime.parse(flightSchedule, formatter);
+
+        /*Getting the Flight Time, plane was in air*/
+        String[] flightTime = getFlightTime().split(":");
+        int hours = Integer.parseInt(flightTime[0]);
+        int minutes = Integer.parseInt(flightTime[1]);
+
+
+        LocalDateTime arrivalTime;
+
+        arrivalTime = departureDateTime.plusHours(hours).plusMinutes(minutes);
+        DateTimeFormatter formatter1 = DateTimeFormatter.ofPattern("EE, dd-MM-yyyy HH:mm a");
+        return arrivalTime.format(formatter1);
+
+    }
+
+    void deleteFlight(String flightNumber) {
+        boolean isFound = false;
+        Iterator<Flight> list = flightList.iterator();
+        while (list.hasNext()) {
+            Flight flight = list.next();
+            if (flight.getFlightNumber().equalsIgnoreCase(flightNumber)) {
+                isFound = true;
+                break;
+            }
+        }
+        if (isFound) {
+            list.remove();
+        } else {
+            System.out.println("Flight with given Number not found...");
+        }
+        displayFlightSchedule();
+    }
+
+    /**
+     * Calculates the distance between the cities/airports based on their lat longs.
+     *
+     * @param lat1 origin city/airport latitude
+     * @param lon1 origin city/airport longitude
+     * @param lat2 destination city/airport latitude
+     * @param lon2 destination city/airport longitude
+     * @return distance both in miles and km between the cities/airports
+     */
+    @Override
+    public String[] calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+        double theta = lon1 - lon2;
+        double distance = Math.sin(degreeToRadian(lat1)) * Math.sin(degreeToRadian(lat2)) + Math.cos(degreeToRadian(lat1)) * Math.cos(degreeToRadian(lat2)) * Math.cos(degreeToRadian(theta));
+        distance = Math.acos(distance);
+        distance = radianToDegree(distance);
+        distance = distance * 60 * 1.1515;
+        /* On the Zero-Index, distance will be in Miles, on 1st-index, distance will be in KM and on the 2nd index distance will be in KNOTS*/
+        String[] distanceString = new String[3];
+        distanceString[0] = String.format("%.2f", distance * 0.8684);
+        distanceString[1] = String.format("%.2f", distance * 1.609344);
+        distanceString[2] = Double.toString(Math.round(distance * 100.0) / 100.0);
+        return distanceString;
+    }
+
+    private double degreeToRadian(double deg) {
+        return (deg * Math.PI / 180.0);
+    }
+
+    private double radianToDegree(double rad) {
+        return (rad * 180.0 / Math.PI);
+    }
+
+    public void displayFlightSchedule() {
+
+        Iterator<Flight> flightIterator = flightList.iterator();
+        System.out.println();
+        System.out.print("+------+-------------------------------------------+-----------+------------------+-----------------------+------------------------+---------------------------+-------------+--------+------------------------+\n");
+        System.out.printf("| Num  | FLIGHT SCHEDULE\t\t\t   | FLIGHT NO | Available Seats  | \tFROM ====>>       | \t====>> TO\t   | \t    ARRIVAL TIME       | FLIGHT TIME |  GATE  |   DISTANCE(MILES/KMS)  |%n");
+        System.out.print("+------+-------------------------------------------+-----------+------------------+-----------------------+------------------------+---------------------------+-------------+--------+------------------------+\n");
+        int i = 0;
+        while (flightIterator.hasNext()) {
+            i++;
+            Flight f1 = flightIterator.next();
+            System.out.println(f1.toString(i));
+            System.out.print("+------+-------------------------------------------+-----------+------------------+-----------------------+------------------------+---------------------------+-------------+--------+------------------------+\n");
+        }
+    }
+
+    @Override
+    public String toString(int i) {
+        return String.format("| %-5d| %-41s | %-9s | \t%-9s | %-21s | %-22s | %-10s  |   %-6sHrs |  %-4s  |  %-8s / %-11s|", i, flightSchedule, flightNumber, numOfSeatsInTheFlight, fromWhichCity, toWhichCity, fetchArrivalTime(), flightTime, gate, distanceInMiles, distanceInKm);
+    }
+
+    /**
+     * Creates new random flight schedule
+     *
+     * @return newly created flight schedule
+     */
+    public String createNewFlightsAndTime() {
+
+        Calendar c = Calendar.getInstance();
+        // Incrementing nextFlightDay, so that next scheduled flight would be in the future, not in the present
+        nextFlightDay += Math.random() * 7;
+        c.add(Calendar.DATE, nextFlightDay);
+        c.add(Calendar.HOUR, nextFlightDay);
+        c.set(Calendar.MINUTE, ((c.get(Calendar.MINUTE) * 3) - (int) (Math.random() * 45)));
+        Date myDateObj = c.getTime();
+        LocalDateTime date = Instant.ofEpochMilli(myDateObj.getTime()).atZone(ZoneId.systemDefault()).toLocalDateTime();
+        date = getNearestHourQuarter(date);
+        return date.format(DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy, HH:mm a "));
+    }
+
+    /**
+     * Formats flight schedule, so that the minutes would be to the nearest quarter.
+     *
+     * @param datetime to be formatting
+     * @return formatted LocalDateTime with minutes close to the nearest hour quarter
+     */
+    public LocalDateTime getNearestHourQuarter(LocalDateTime datetime) {
+        int minutes = datetime.getMinute();
+        int mod = minutes % 15;
+        LocalDateTime newDatetime;
+        if (mod < 8) {
+            newDatetime = datetime.minusMinutes(mod);
+        } else {
+            newDatetime = datetime.plusMinutes(15 - mod);
+        }
+        newDatetime = newDatetime.withSecond(0).withNano(0);
+        return newDatetime;
+    }
+
+
+    //        ************************************************************ Setters & Getters ************************************************************
+
+    public int getNoOfSeats() {
+        return numOfSeatsInTheFlight;
+    }
+
+    public String getFlightNumber() {
         return flightNumber;
     }
 
-    public Route getRoute() {
-        return route;
+    public void setNoOfSeatsInTheFlight(int numOfSeatsInTheFlight) {
+        this.numOfSeatsInTheFlight = numOfSeatsInTheFlight;
     }
 
-    // 1.1.1 Extract Method
-    public boolean isAvailable() {
-        return availableSeats > 0 && !isDeparted();
+    public String getFlightTime() {
+        return flightTime;
     }
 
-    private boolean isDeparted() {
-        return LocalDateTime.now().isAfter(schedule.departure());
+    public List<Flight> getFlightList() {
+        return flightList;
     }
 
-    // 1.4.3 Replace Nested Conditional with Guard Clauses
-    public void bookPassenger(Passenger passenger, int seats) {
-        if (passenger == null) throw new IllegalArgumentException("Passenger required");
-        if (seats <= 0) throw new IllegalArgumentException("Invalid seat count");
-        if (!isAvailable()) throw new IllegalStateException("Flight not available");
-        if (seats > availableSeats) throw new IllegalArgumentException("Not enough seats");
+    // Replace direct access to listOfRegisteredCustomersInAFlight with proper methods
+    private List<Customer> listOfRegisteredCustomersInAFlight;
 
-        passengers.add(new PassengerManifest(passenger, seats));
-        availableSeats -= seats;
+    public List<Customer> getRegisteredCustomers() {
+        return new ArrayList<>(listOfRegisteredCustomersInAFlight); // Return a copy to prevent modification
     }
 
-    // 1.1.3 Extract Variable
-    public double calculateRevenue() {
-        final double basePrice = getBasePrice();
-        final double totalSeatsBooked = getTotalSeatsBooked();
-        return basePrice * totalSeatsBooked;
-    }
-
-    private int getTotalSeatsBooked() {
-        return passengers.stream()
-                .mapToInt(PassengerManifest::seats)
-                .sum();
-    }
-
-    // 1.3.3 Encapsulate Collection
-    public List<PassengerManifest> getPassengerManifest() {
-        return Collections.unmodifiableList(passengers);
-    }
-
-    // 1.2.1 Move Method (from original FlightReservation)
-    public boolean hasPassenger(Passenger passenger) {
-        return passengers.stream()
-                .anyMatch(p -> p.passenger().equals(passenger));
-    }
-
-    // 1.4.2 Consolidate Conditional Expression
-    public boolean needsCateringService() {
-        return isLongHaulFlight() && !isDomestic();
-    }
-
-    private boolean isLongHaulFlight() {
-        return schedule.duration().toHours() > 6;
-    }
-
-    // Value Object definitions
-    public record FlightNumber(String airlineCode, int number) {
-        public FlightNumber {
-            if (!airlineCode.matches("[A-Z]{2}")) {
-                throw new IllegalArgumentException("Invalid airline code");
-            }
-            if (number < 1000 || number > 9999) {
-                throw new IllegalArgumentException("Invalid flight number");
-            }
-        }
-
-        @Override
-        public String toString() {
-            return String.format("%s-%04d", airlineCode, number);
+    public void addCustomer(Customer customer) {
+        if (!listOfRegisteredCustomersInAFlight.contains(customer)) {
+            listOfRegisteredCustomersInAFlight.add(customer);
         }
     }
 
-    public record Route(Airport origin, Airport destination) {
-        public Route {
-            if (origin.equals(destination)) {
-                throw new IllegalArgumentException("Origin and destination cannot be same");
-            }
-        }
+    public void removeCustomer(Customer customer) {
+        listOfRegisteredCustomersInAFlight.remove(customer);
     }
 
-    public record Schedule(LocalDateTime departure,
-                           LocalDateTime arrival,
-                           Duration duration) {}
-
-    public record PassengerManifest(Passenger passenger, int seats) {}
-
-    public record Aircraft(int totalSeats) {
-        public Aircraft {
-            if (totalSeats < 50 || totalSeats > 500) {
-                throw new IllegalArgumentException("Invalid seat capacity");
-            }
-        }
+    // Similar methods for flightList
+    public static List<Flight> getAllFlights() {
+        return new ArrayList<>(flightList); // Return a copy to prevent modification
     }
 
-    // 1.5.2 Introduce Parameter Object
-    public record BookingRequest(Passenger passenger,
-                                 int seats,
-                                 LocalDateTime bookingTime) {}
+    public static void addFlight(Flight flight) {
+        flightList.add(flight);
+    }
+
+    public static void removeFlight(Flight flight) {
+        flightList.remove(flight);
+    }
+
+    public String getFlightSchedule() {
+        return flightSchedule;
+    }
+
+    public String getFromWhichCity() {
+        return fromWhichCity;
+    }
+
+    public String getGate() {
+        return gate;
+    }
+
+    public String getToWhichCity() {
+        return toWhichCity;
+    }
+
+
+
+    // Move flight-related search methods from Customer to Flight
+    public static Flight findFlightByNumber(String flightNumber) {
+        for (Flight flight : flightList) {
+            if (flight.getFlightNumber().equals(flightNumber)) {
+                return flight;
+            }
+        }
+        return null;
+    }
 }
