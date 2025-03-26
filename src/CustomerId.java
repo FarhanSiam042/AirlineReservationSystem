@@ -1,4 +1,4 @@
-// New file: CustomerId.java
+
 public record CustomerId(String value) {
     public CustomerId {
         if (value == null || value.length() != 6) {

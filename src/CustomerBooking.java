@@ -1,0 +1,1 @@
+public record CustomerBooking(Flight flight, int ticketCount) {}
